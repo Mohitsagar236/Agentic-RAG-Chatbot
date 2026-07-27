@@ -4,7 +4,6 @@ import logging
 from typing import List
 
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +13,10 @@ def chunk_documents(
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
 ) -> List[Document]:
+    # Import lazily: the package imports optional ML integrations that are
+    # expensive and unnecessary for commands that never perform ingestion.
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,

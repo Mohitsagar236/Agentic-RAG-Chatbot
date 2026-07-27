@@ -16,7 +16,9 @@ def setup_logging(level: str = "INFO") -> None:
 
 
 def file_hash(path: str | Path) -> str:
-    h = hashlib.md5()
+    """Return a collision-resistant content identifier for a file."""
+
+    h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)

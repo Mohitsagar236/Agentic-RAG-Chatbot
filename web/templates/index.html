@@ -4,22 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>RAG Assistant</title>
-  <link rel="stylesheet" href="/static/style.css?v=2" />
+  <link rel="stylesheet" href="/static/style.css?v=4" />
 </head>
 <body>
 
 <!-- Mobile sidebar overlay -->
-<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<button type="button" class="sidebar-overlay" id="sidebar-overlay" aria-label="Close sidebar" tabindex="-1"></button>
 
 <!-- ── Sidebar ── -->
-<aside class="sidebar" id="sidebar">
+<aside class="sidebar" id="sidebar" aria-label="Chat and document navigation">
   <div class="sidebar-top">
-    <button class="sidebar-close-btn" id="sidebar-close-btn" title="Close sidebar">
+    <button type="button" class="sidebar-close-btn" id="sidebar-close-btn" aria-label="Close sidebar">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     </button>
-    <button class="new-chat-btn" id="new-chat-btn">
+    <button type="button" class="new-chat-btn" id="new-chat-btn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
       </svg>
@@ -33,7 +33,7 @@
       <div class="sidebar-group-header">
         <p class="sidebar-group-label">Chats</p>
       </div>
-      <div id="chat-list" class="chat-list"></div>
+      <div id="chat-list" class="chat-list" aria-live="polite"></div>
     </div>
 
     <!-- KB Stats -->
@@ -41,12 +41,12 @@
       <p class="sidebar-group-label">Knowledge Base</p>
       <div class="kb-stats-row">
         <div class="kb-stat">
-          <span class="kb-stat-num" id="chunk-count">—</span>
+          <span class="kb-stat-num" id="chunk-count" aria-live="polite">—</span>
           <span class="kb-stat-lbl">chunks</span>
         </div>
         <div class="kb-divider"></div>
         <div class="kb-stat">
-          <span class="kb-stat-num" id="doc-count">—</span>
+          <span class="kb-stat-num" id="doc-count" aria-live="polite">—</span>
           <span class="kb-stat-lbl">docs</span>
         </div>
       </div>
@@ -60,25 +60,25 @@
     <div class="sidebar-group" id="docs-section" style="display:none">
       <div class="sidebar-group-header">
         <p class="sidebar-group-label">Documents</p>
-        <button class="icon-xs" id="refresh-docs-btn" title="Refresh">
+        <button type="button" class="icon-xs" id="refresh-docs-btn" aria-label="Refresh documents">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
           </svg>
         </button>
       </div>
-      <div id="docs-list" class="docs-list"></div>
+      <div id="docs-list" class="docs-list" aria-live="polite"></div>
     </div>
   </div>
 
   <div class="sidebar-footer">
-    <button class="sf-btn" id="upload-trigger-btn">
+    <button type="button" class="sf-btn" id="upload-trigger-btn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
         <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
       </svg>
       Upload documents
     </button>
-    <button class="sf-btn sf-btn-danger" id="reset-btn">
+    <button type="button" class="sf-btn sf-btn-danger" id="reset-btn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
         <path d="M10 11v6M14 11v6"/>
@@ -93,7 +93,8 @@
 
   <!-- Top bar -->
   <header class="topbar">
-    <button class="topbar-btn" id="sidebar-toggle-btn" title="Toggle sidebar">
+    <button type="button" class="topbar-btn" id="sidebar-toggle-btn"
+            aria-label="Toggle sidebar" aria-controls="sidebar" aria-expanded="true">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <line x1="3" y1="6" x2="21" y2="6"/>
         <line x1="3" y1="12" x2="21" y2="12"/>
@@ -106,7 +107,7 @@
         <span id="model-chip-name">RAG Assistant</span>
       </div>
     </div>
-    <button class="topbar-btn" id="clear-memory-btn" title="Clear conversation memory">
+    <button type="button" class="topbar-btn" id="clear-memory-btn" aria-label="Clear this chat's conversation memory">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
       </svg>
@@ -124,66 +125,72 @@
       <h1 class="welcome-title">How can I help you?</h1>
       <p class="welcome-sub">Ask me anything about your uploaded documents.</p>
       <div class="suggestion-grid">
-        <button class="suggestion-card" onclick="useSuggestion(this)">
-          <div class="suggestion-icon">🔎</div>
+        <button type="button" class="suggestion-card" data-suggestion="What is RAG and why does it reduce hallucinations?">
+          <span class="suggestion-icon">🔎</span>
           <span>What is RAG and why does it reduce hallucinations?</span>
         </button>
-        <button class="suggestion-card" onclick="useSuggestion(this)">
-          <div class="suggestion-icon">🧠</div>
+        <button type="button" class="suggestion-card" data-suggestion="What are the three types of machine learning?">
+          <span class="suggestion-icon">🧠</span>
           <span>What are the three types of machine learning?</span>
         </button>
-        <button class="suggestion-card" onclick="useSuggestion(this)">
-          <div class="suggestion-icon">⚡</div>
+        <button type="button" class="suggestion-card" data-suggestion="Explain the transformer attention mechanism">
+          <span class="suggestion-icon">⚡</span>
           <span>Explain the transformer attention mechanism</span>
         </button>
-        <button class="suggestion-card" onclick="useSuggestion(this)">
-          <div class="suggestion-icon">📋</div>
+        <button type="button" class="suggestion-card" data-suggestion="Summarize the key points from my documents">
+          <span class="suggestion-icon">📋</span>
           <span>Summarize the key points from my documents</span>
         </button>
       </div>
     </div>
 
     <!-- Message thread -->
-    <div class="thread" id="thread"></div>
+    <div class="thread" id="thread" role="log" aria-live="polite" aria-relevant="additions"></div>
   </div>
 
   <!-- Upload panel (slides up from input area) -->
-  <div class="upload-panel" id="upload-panel" style="display:none">
+  <section class="upload-panel" id="upload-panel" style="display:none"
+           aria-label="Upload documents" aria-hidden="true">
     <div class="upload-panel-inner">
-      <div class="drop-zone" id="drop-zone">
+      <button type="button" class="drop-zone" id="drop-zone" aria-describedby="drop-hint">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
           <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
         </svg>
         <span>Drop files here or <u>browse</u></span>
-        <span class="drop-hint">PDF · TXT · CSV · MD</span>
-        <input type="file" id="file-input" multiple accept=".pdf,.txt,.csv,.md" hidden />
-      </div>
+        <span class="drop-hint" id="drop-hint">PDF · TXT · CSV · MD</span>
+      </button>
+      <input type="file" id="file-input" multiple accept=".pdf,.txt,.csv,.md" hidden />
       <div id="file-list" class="file-list"></div>
       <div class="upload-actions">
-        <button class="btn-ingest" id="ingest-btn" disabled>Ingest Documents</button>
-        <button class="btn-cancel" id="cancel-upload-btn">Cancel</button>
+        <button type="button" class="btn-ingest" id="ingest-btn" disabled>Ingest Documents</button>
+        <button type="button" class="btn-cancel" id="cancel-upload-btn">Cancel</button>
       </div>
-      <div id="ingest-status" class="ingest-status"></div>
+      <div id="ingest-status" class="ingest-status" role="status" aria-live="polite"></div>
     </div>
-  </div>
+  </section>
 
   <!-- Input area -->
   <div class="input-area">
     <div class="input-wrapper" id="input-wrapper">
       <div class="input-row">
-        <button class="input-action-btn" id="attach-btn" title="Upload documents">
+        <button type="button" class="input-action-btn" id="attach-btn"
+                aria-label="Upload documents" aria-controls="upload-panel" aria-expanded="false">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
           </svg>
         </button>
+        <label class="sr-only" for="question-input">Ask a question about your documents</label>
         <textarea
           id="question-input"
           placeholder="Message RAG Assistant…"
           rows="1"
+          maxlength="2000"
+          aria-describedby="input-disclaimer"
           disabled
         ></textarea>
-        <select id="voice-lang" class="voice-lang-select" title="Voice language">
+        <label class="sr-only" for="voice-lang">Voice input language</label>
+        <select id="voice-lang" class="voice-lang-select" aria-label="Voice input language">
           <option value="auto">🌐 Auto</option>
           <option value="en">English</option>
           <option value="hi">हिंदी</option>
@@ -199,7 +206,8 @@
           <option value="it">Italiano</option>
           <option value="tr">Türkçe</option>
         </select>
-        <button class="mic-btn" id="mic-btn" title="Voice input (Deepgram)">
+        <button type="button" class="mic-btn" id="mic-btn"
+                aria-label="Start browser voice input" aria-pressed="false">
           <svg class="mic-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
             <path d="M19 10v2a7 7 0 01-14 0v-2"/>
@@ -208,7 +216,7 @@
           </svg>
           <span class="mic-pulse"></span>
         </button>
-<button class="vm-open-btn" id="vm-open-btn" title="Start voice conversation">
+        <button type="button" class="vm-open-btn" id="vm-open-btn" aria-label="Start browser voice conversation">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <rect x="2" y="8" width="3" height="8" rx="1.5"/>
             <rect x="7" y="5" width="3" height="14" rx="1.5"/>
@@ -217,7 +225,7 @@
           </svg>
           Voice
         </button>
-        <button class="send-btn" id="send-btn" disabled>
+        <button type="button" class="send-btn" id="send-btn" aria-label="Send message" disabled>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <line x1="12" y1="19" x2="12" y2="5"/>
             <polyline points="5 12 12 5 19 12"/>
@@ -225,29 +233,33 @@
         </button>
       </div>
       <!-- Voice input status bar -->
-      <div class="voice-status" id="voice-status" style="display:none">
+      <div class="voice-status" id="voice-status" style="display:none" role="status" aria-live="polite">
         <div class="voice-bars">
           <span></span><span></span><span></span><span></span><span></span>
         </div>
         <span class="voice-label" id="voice-label">Listening…</span>
-        <button class="voice-stop-btn" id="voice-stop-btn">Stop</button>
+        <button type="button" class="voice-stop-btn" id="voice-stop-btn">Stop</button>
       </div>
       <!-- Voice output (TTS) status bar -->
-      <div class="tts-status" id="tts-status" style="display:none">
+      <div class="tts-status" id="tts-status" style="display:none" role="status" aria-live="polite">
         <div class="tts-bars">
           <span></span><span></span><span></span><span></span><span></span>
         </div>
         <span class="tts-label">Speaking…</span>
-        <button class="tts-stop-btn" id="tts-stop-btn">Stop</button>
+        <button type="button" class="tts-stop-btn" id="tts-stop-btn">Stop</button>
       </div>
     </div>
-    <p class="input-disclaimer">RAG Assistant may make mistakes. Verify information from your documents.</p>
+    <p class="input-disclaimer" id="input-disclaimer">
+      RAG Assistant may make mistakes. Verify information from your documents.
+      Voice transcription uses your browser's speech service.
+    </p>
   </div>
 </main>
 
 <!-- ── Document Viewer Modal ── -->
-<div class="modal-overlay" id="doc-overlay">
-  <div class="doc-modal">
+<div class="modal-overlay" id="doc-overlay" aria-hidden="true">
+  <div class="doc-modal" role="dialog" aria-modal="true"
+       aria-labelledby="doc-modal-name" aria-describedby="doc-modal-info">
     <div class="doc-modal-head">
       <div class="doc-modal-meta">
         <span class="doc-modal-icon" id="doc-modal-icon">📄</span>
@@ -258,7 +270,7 @@
       </div>
       <div class="doc-modal-actions">
         <span class="doc-type-badge" id="doc-type-badge">TXT</span>
-        <button class="icon-btn" id="doc-modal-close">
+        <button type="button" class="icon-btn" id="doc-modal-close" aria-label="Close document viewer">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -273,31 +285,32 @@
     </div>
     <div class="doc-modal-foot" id="doc-modal-foot" style="display:none">
       <span class="doc-trunc" id="doc-trunc"></span>
-      <button class="btn-close-modal" id="doc-modal-close-foot">Close</button>
+      <button type="button" class="btn-close-modal" id="doc-modal-close-foot">Close</button>
     </div>
   </div>
 </div>
 
 <!-- ── Voice Mode Overlay ── -->
-<div class="voice-mode-overlay" id="voice-mode-overlay">
-  <div class="vm-container">
-    <p class="vm-model-label">Voice Mode</p>
-    <div class="vm-orb vm-orb-idle" id="vm-orb">
-      <div class="vm-ring vm-ring-1"></div>
-      <div class="vm-ring vm-ring-2"></div>
-      <div class="vm-ring vm-ring-3"></div>
-      <div class="vm-core"></div>
-    </div>
+<div class="voice-mode-overlay" id="voice-mode-overlay" aria-hidden="true">
+  <div class="vm-container" role="dialog" aria-modal="true"
+       aria-labelledby="vm-title" aria-describedby="vm-status">
+    <p class="vm-model-label" id="vm-title">Browser Voice Mode</p>
+    <button type="button" class="vm-orb vm-orb-idle" id="vm-orb" aria-label="Start listening">
+      <span class="vm-ring vm-ring-1"></span>
+      <span class="vm-ring vm-ring-2"></span>
+      <span class="vm-ring vm-ring-3"></span>
+      <span class="vm-core"></span>
+    </button>
     <p class="vm-status" id="vm-status">Tap orb to speak</p>
     <p class="vm-transcript" id="vm-transcript"></p>
     <p class="vm-response" id="vm-response"></p>
-    <button class="vm-end-btn" id="vm-end-btn">End conversation</button>
+    <button type="button" class="vm-end-btn" id="vm-end-btn">End conversation</button>
   </div>
 </div>
 
 <!-- ── Toast ── -->
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/static/app.js?v=3"></script>
+<script type="module" src="/static/js/main.js?v=4"></script>
 </body>
 </html>

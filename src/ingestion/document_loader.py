@@ -1,6 +1,7 @@
 """Loads PDF, TXT, CSV, and Markdown files into LangChain Document objects."""
 
 import csv
+import hashlib
 import logging
 from pathlib import Path
 from typing import List
@@ -8,6 +9,14 @@ from typing import List
 from langchain_core.documents import Document
 
 logger = logging.getLogger(__name__)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for block in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _load_txt(path: Path) -> List[Document]:
@@ -66,13 +75,19 @@ _LOADERS = {
 
 def load_document(path: str | Path) -> List[Document]:
     path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"Document not found: {path}")
     suffix = path.suffix.lower()
     loader = _LOADERS.get(suffix)
     if loader is None:
         logger.warning("Unsupported file type: %s — skipping.", path)
         return []
     logger.info("Loading %s", path.name)
-    return loader(path)
+    documents = loader(path)
+    content_hash = _sha256(path)
+    for document in documents:
+        document.metadata["content_hash"] = content_hash
+    return documents
 
 
 def load_directory(directory: str | Path, recursive: bool = True) -> List[Document]:

@@ -1,7 +1,14 @@
-"""End-to-end integration tests — requires Groq API key and ingested documents."""
+"""Opt-in live integration tests.
 
+These tests load a real embedding model, open the configured persisted vector
+database, and may call an external LLM. They are intentionally skipped unless
+``RUN_E2E=1`` is set.
+"""
+
+import os
 import sys
 import warnings
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -11,16 +18,38 @@ import pytest
 import config
 
 
+pytestmark = [
+    pytest.mark.e2e,
+    pytest.mark.skipif(
+        os.getenv("RUN_E2E", "").strip() != "1",
+        reason=(
+            "Live E2E tests are opt-in; set RUN_E2E=1 after configuring "
+            "a model provider and ingesting documents"
+        ),
+    ),
+]
+
+
 def requires_api_key(fn):
+    provider_has_credentials = (
+        (config.LLM_PROVIDER == "groq" and bool(config.GROQ_API_KEY))
+        or (config.LLM_PROVIDER == "openai" and bool(config.OPENAI_API_KEY))
+        or config.LLM_PROVIDER == "huggingface"
+    )
     return pytest.mark.skipif(
-        not config.GROQ_API_KEY and not config.OPENAI_API_KEY,
-        reason="No LLM API key set — skipping live LLM tests",
+        not provider_has_credentials,
+        reason=f"LLM_PROVIDER={config.LLM_PROVIDER} is not fully configured",
     )(fn)
 
 
 def requires_ingested_docs(fn):
+    database_path = (
+        config.CHROMA_PERSIST_DIR
+        if config.VECTOR_DB == "chroma"
+        else config.FAISS_INDEX_PATH
+    )
     return pytest.mark.skipif(
-        not Path(config.CHROMA_PERSIST_DIR).exists(),
+        not Path(database_path).exists(),
         reason="No ingested documents — run python ingest.py first",
     )(fn)
 
@@ -109,8 +138,16 @@ class TestLLMResponses:
     @requires_ingested_docs
     def test_hallucination_guard_on_unknown_topic(self, agent):
         result = agent.chat("What is the boiling point of liquid nitrogen?")
-        # This is NOT in our documents — agent should admit it
-        assert isinstance(result["answer"], str)
+        answer = result["answer"].lower()
+        assert any(
+            phrase in answer
+            for phrase in (
+                "don't have enough information",
+                "not in the ingested documents",
+                "documents do not contain",
+                "cannot answer",
+            )
+        ), f"Expected a grounded refusal, got: {result['answer']}"
         print(f"\n  [OK] Out-of-scope: {result['answer'][:200]}")
 
     @requires_api_key
@@ -153,7 +190,7 @@ class TestAgenticTools:
     def test_date_tool_returns_date_string(self):
         from src.agent.tools import get_current_date
         result = get_current_date.invoke({})
-        assert "2026" in result or "202" in result  # current year
+        assert str(datetime.now().year) in result
 
     @requires_api_key
     def test_agentic_executor_can_be_created(self, db):

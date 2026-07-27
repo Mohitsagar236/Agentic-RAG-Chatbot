@@ -1,315 +1,282 @@
 # Agentic RAG Chatbot
 
-A lightweight AI agent that ingests documents, creates embeddings, stores them in a vector database, and answers questions using retrieval-augmented generation (RAG). Answers are grounded strictly in the ingested documents — the system refuses to speculate when information is not available.
+A document-grounded retrieval-augmented generation (RAG) application with a
+Flask web interface, a terminal client, local document ingestion, conversation
+memory, and Chroma or FAISS vector storage.
 
----
+The default flow retrieves document chunks before calling the configured chat
+model. Prompting and the no-context short circuit reduce unsupported answers,
+but model output should still be evaluated before the application is used for
+high-stakes decisions.
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        INGESTION PIPELINE                         │
-│                                                                  │
-│  Documents      Preprocessing    Embedding        Vector DB      │
-│  PDF/TXT/CSV  → Clean & Chunk  → sentence-       → ChromaDB      │
-│  MD / GDrive                     transformers       (persisted)   │
-└──────────────────────────────────────────────────────────────────┘
-                                                        │
-                                                        ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                         QUERY PIPELINE                            │
-│                                                                  │
-│  User Query → Embed Query → MMR Retrieval → Format Context       │
-│                                                   │              │
-│  Response ← LLM (Groq / OpenAI) ←── System Prompt + Context     │
-│                                                                  │
-│  Conversation Memory: Sliding window (last 6 turns)              │
-└──────────────────────────────────────────────────────────────────┘
+```text
+PDF / TXT / CSV / Markdown
+          |
+          v
+load -> normalize -> chunk -> embed -> Chroma or FAISS
+                                         |
+Browser / CLI -> conversation registry -> retrieve -> chat model -> cited answer
 ```
 
-### Component Map
+The main boundaries are:
 
-| Module | File | Responsibility |
-|--------|------|----------------|
-| Document Loader | `src/ingestion/document_loader.py` | Load PDF, TXT, CSV, MD |
-| Preprocessor | `src/ingestion/preprocessor.py` | Clean and normalize text |
-| Chunker | `src/ingestion/chunker.py` | Recursive character text splitting |
-| Embedding Generator | `src/embeddings/embedding_generator.py` | HuggingFace or OpenAI embeddings |
-| Vector Database | `src/vectorstore/vector_db.py` | ChromaDB with persistence |
-| Retriever | `src/retrieval/retriever.py` | MMR or similarity search + context formatting |
-| RAG Agent | `src/agent/rag_agent.py` | Orchestrates retrieval + LLM + memory |
-| Agent Tools | `src/agent/tools.py` | LangChain tools for agentic ReAct loop |
-| Conversation Memory | `src/memory/conversation_memory.py` | Sliding-window conversation history |
-| Google Drive Loader | `src/ingestion/gdrive_loader.py` | Bonus: ingest from Google Drive |
-| Flask Web UI | `web/app.py` | Full web interface with chat, upload, voice |
-| CLI | `cli/main.py` | Terminal interface using Rich |
+| Area | Modules | Responsibility |
+| --- | --- | --- |
+| Configuration | `config.py` | Load and validate environment settings |
+| Ingestion | `ingest.py`, `src/ingestion/`, `src/services/` | Load, normalize, deduplicate, chunk, and store documents |
+| Embeddings | `src/embeddings/` | Create Hugging Face or OpenAI embeddings independently of the chat provider |
+| Storage | `src/vectorstore/` | Provide a common Chroma/FAISS interface |
+| Retrieval and chat | `src/retrieval/`, `src/agent/`, `src/memory/` | Retrieve context, call the model, and maintain bounded conversation history |
+| Web application | `web/app.py`, `web/api.py`, `web/services.py` | Application factory, JSON routes, lazy services, uploads, and conversation isolation |
+| Frontend | `web/templates/`, `web/static/js/` | Modular browser UI and API client |
+| Production entry point | `web/wsgi.py` | Expose the Flask app to a WSGI server |
 
----
+The web application is created with an application factory. Expensive
+embeddings and vector-store resources are initialized lazily, while route tests
+inject in-memory fakes.
 
-## Features
+## Requirements
 
-### Core (Required)
-- **Document ingestion pipeline** — PDF, TXT, CSV, Markdown
-- **Text chunking** — `RecursiveCharacterTextSplitter` with configurable size and overlap
-- **Embedding generation** — `sentence-transformers/all-MiniLM-L6-v2` (free, local)
-- **Vector database** — ChromaDB with persistent storage
-- **Query interface** — Flask web UI + CLI
-- **LLM response generation** — Groq (Llama 3.1, free) or OpenAI
-
-### Bonus Features
-- **Multi-source ingestion** — local files, directories, and Google Drive (via service account)
-- **Conversation memory** — sliding window of last 6 turns injected into every prompt
-- **Agentic behavior** — LangGraph ReAct agent with `search_documents`, `list_sources`, and `get_current_date` tools; the agent autonomously decides when and what to retrieve
-- **Web UI** — Flask-based chat interface with document manager, voice input (Web Speech API), and text-to-speech output
-
----
+- Python 3.10 or newer
+- Enough disk space for the selected embedding/chat models and vector database
+- A Groq or OpenAI API key for those chat providers
+- Network access on the first Hugging Face model load, unless the model is
+  already cached
 
 ## Setup
 
-### 1. Clone / open the project
+Create and activate a virtual environment:
+
 ```bash
-cd biosimilar
+python -m venv .venv
 ```
 
-### 2. Create a virtual environment
-```bash
-python -m venv venv
-# Windows:
-venv\Scripts\activate
-# macOS/Linux:
-source venv/bin/activate
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
 ```
 
-### 3. Install dependencies
+macOS or Linux:
+
 ```bash
-pip install -r requirements.txt
+source .venv/bin/activate
 ```
 
-### 4. Configure environment
-Create a `.env` file in the project root:
+Install runtime dependencies:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Copy `.env.example` to `.env`, then set the provider and credentials:
+
+```bash
+cp .env.example .env
+```
+
+PowerShell equivalent:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Configuration is validated at startup. Process environment variables take
+precedence over `.env`, which makes the same configuration suitable for local
+development and managed deployments.
+
+### Model configuration
+
+Chat and embedding providers are independent:
+
 ```env
-# Required: LLM provider
 LLM_PROVIDER=groq
-GROQ_API_KEY=your_groq_api_key_here   # free at console.groq.com
-GROQ_MODEL=llama-3.1-8b-instant
+GROQ_API_KEY=replace_me
 
-# Optional: use OpenAI instead
-# LLM_PROVIDER=openai
-# OPENAI_API_KEY=sk-...
-
-# Vector store (defaults work out of the box)
-CHROMA_PERSIST_DIR=./chroma_db
-DOCUMENTS_DIR=./data/documents
-CHUNK_SIZE=1000
-CHUNK_OVERLAP=200
-TOP_K=5
+EMBEDDING_PROVIDER=huggingface
+HF_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 ```
 
-> **No API key at all?** Set `LLM_PROVIDER=huggingface` in `.env` — the system falls back to `TinyLlama` for generation (requires `pip install transformers torch`). Embeddings always use `sentence-transformers` locally at no cost.
+For OpenAI chat and embeddings:
 
----
+```env
+LLM_PROVIDER=openai
+EMBEDDING_PROVIDER=openai
+OPENAI_API_KEY=replace_me
+```
 
-## Usage
+For a fully local chat model:
 
-### Step 1 — Ingest Documents
+```env
+LLM_PROVIDER=huggingface
+EMBEDDING_PROVIDER=huggingface
+```
 
-The `data/documents/` directory includes 11 sample documents covering AI fundamentals, machine learning, NLP, RAG, vector databases, LLM prompting, deep learning, AI ethics, MLOps, Python best practices, and transformer architecture.
+The local path downloads Hugging Face models and can be slow on CPU. See
+`.env.example` for every supported setting, including storage paths, model
+names, upload limits, chunking, and the minimum retrieval relevance threshold.
+
+### Optional Google Drive ingestion
+
+Install the optional client libraries:
 
 ```bash
-# Ingest all documents in data/documents/ (default)
+python -m pip install "google-api-python-client>=2.0,<3.0" "google-auth>=2.0,<3.0"
+```
+
+Set `GOOGLE_SERVICE_ACCOUNT_KEY` to the service-account JSON path, share the
+Drive folder with that service account, and use `--gdrive` as shown below.
+
+## Ingest documents
+
+The repository includes 12 sample documents under `data/documents/`.
+
+```bash
+# Ingest the sample directory
 python ingest.py
 
-# Ingest a specific file
-python ingest.py --source path/to/your/file.pdf
+# Ingest one file or another directory
+python ingest.py --source path/to/document.pdf
+python ingest.py --source path/to/documents/
 
-# Ingest an entire folder
-python ingest.py --source my_docs/
-
-# Ingest from Google Drive (requires service account — see src/ingestion/gdrive_loader.py)
-python ingest.py --gdrive YOUR_FOLDER_ID
-
-# Clear the database and re-ingest
+# Clear the configured vector store, then ingest
 python ingest.py --reset
+
+# Optional Google Drive folder
+python ingest.py --gdrive FOLDER_ID
 ```
 
-### Step 2 — Ask Questions
+Changing the embedding provider or embedding model requires rebuilding the
+vector index so document and query vectors remain compatible.
 
-**Option A: Web UI (recommended)**
+## Run the application
+
+### Development
+
 ```bash
 python web/app.py
 ```
-Open [http://localhost:5000](http://localhost:5000). Features: multi-turn chat, document upload, document manager (view/delete), voice input, and text-to-speech.
 
-**Option B: CLI**
+Open <http://127.0.0.1:5000>. This uses Flask's development server and should
+not be exposed to the internet.
+
+The terminal client is also available:
+
 ```bash
 python cli/main.py
 ```
-Commands at the prompt:
-- `sources` — list ingested documents
-- `clear` — reset conversation memory
-- `quit` — exit
 
-### Step 3 — Run Tests
+CLI commands include `sources`, `clear`, and `quit`.
+
+### Production WSGI
+
+Waitress is included in the runtime requirements:
+
 ```bash
-pytest tests/ -v
+waitress-serve --listen=0.0.0.0:8000 web.wsgi:app
 ```
 
----
+Put TLS, authentication, request-size enforcement, and trusted proxy handling
+at the deployment edge. The built-in conversation registry, local vector
+stores, and rate-limit counters are process-local; use one application process
+for this local deployment shape, or externalize those concerns before scaling
+to multiple processes or hosts.
 
-## Example Queries
+The current API has no user authentication. Do not expose document upload,
+delete, or reset operations to untrusted users without adding access control.
 
-After ingesting the sample documents:
+## HTTP API
 
-```
-What is retrieval-augmented generation and why does it reduce hallucinations?
-What are the three main types of machine learning?
-Compare FAISS and ChromaDB as vector databases.
-Explain the transformer self-attention mechanism.
-What is MMR retrieval and how does it differ from similarity search?
-How does chain-of-thought prompting improve LLM reasoning?
-What are the key steps in a machine learning project according to the MLOps SOP?
-What ethical concerns exist around large language models?
-```
+The browser client calls these routes:
 
----
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/health` | Lightweight process liveness check |
+| `GET` | `/api/status` | Provider, model, document, and chunk status |
+| `POST` | `/api/chat` | Ask a question for a `conversation_id` |
+| `POST` | `/api/ingest` | Upload one or more supported documents |
+| `GET` | `/api/documents` | List indexed documents |
+| `GET` | `/api/documents/content?source=...` | Preview indexed content |
+| `DELETE` | `/api/documents?source=...` | Delete one indexed document |
+| `POST` | `/api/clear-memory` | Clear one conversation |
+| `POST` | `/api/reset` | Clear the configured knowledge base |
 
-## Architecture Decisions
+JSON chat example:
 
-### 1. ChromaDB over FAISS
-ChromaDB provides persistence, metadata filtering, and a simple Python API without manual index save/load. FAISS is faster at scale but requires more plumbing. For a prototype with document-level metadata needs, ChromaDB is the right tradeoff.
-
-### 2. MMR as default retrieval strategy
-Maximum Marginal Relevance penalizes chunks too similar to already-selected ones, resulting in broader context coverage. Pure cosine similarity tends to return near-duplicate chunks from the same paragraph. MMR is the default; similarity search is the fallback if MMR raises an exception.
-
-### 3. Recursive Character Splitter
-`RecursiveCharacterTextSplitter` splits at natural boundaries (paragraphs → sentences → words) before character-level splitting. This preserves semantic coherence better than naive fixed-size windows, leading to more coherent retrieved chunks.
-
-### 4. Groq + free local embeddings
-Groq provides fast, free LLM inference via Llama 3.1. `sentence-transformers/all-MiniLM-L6-v2` runs locally at zero cost for embeddings. This makes the entire system free to operate with no credit card. OpenAI is supported as an optional upgrade.
-
-### 5. Sliding-window conversation memory (6 turns)
-Unlimited history would overflow the LLM's context window. A window of 6 turns (12 messages) captures enough recent context for multi-turn conversations without increasing cost or latency.
-
-### 6. Strict system prompt for hallucination prevention
-The LLM is instructed to answer only from retrieved context and to explicitly say "I don't have enough information" rather than speculate. Temperature is set to `0.1` for deterministic, factual outputs.
-
-### 7. Two agent modes
-The primary `RAGAgent` always retrieves before responding — reliable and fast. The optional `create_agentic_executor` uses LangGraph's ReAct loop with three tools, giving the model control over when and what to retrieve for more complex multi-step queries.
-
----
-
-## Limitations
-
-1. **Retrieval quality ceiling** — if the relevant information is not retrieved (poor chunking, semantic mismatch, or insufficient Top-K), the LLM correctly says "I don't know" but cannot recover the answer.
-
-2. **Chunk boundary artifacts** — splitting can sever cross-sentence context. Increasing chunk size reduces this but raises embedding cost and may dilute retrieval relevance.
-
-3. **No multi-hop reasoning** — if the answer requires connecting information from two distant parts of different documents, a single retrieval step may miss the link. Multi-hop RAG (retrieve → reason → retrieve again) is not implemented.
-
-4. **Embedding model locked at ingestion** — changing the embedding model after ingestion requires a full re-ingest, since query and document embeddings must be in the same vector space.
-
-5. **Single language** — optimized for English; other languages will have reduced embedding and retrieval quality without a multilingual model.
-
-6. **Scalability** — ChromaDB is a local store. It is not suitable for large (millions of chunks) or multi-user production deployments without replacing it with a managed vector database.
-
----
-
-## Scaling Suggestions
-
-1. **Managed vector database** — Replace ChromaDB with Pinecone, Qdrant Cloud, or Weaviate for horizontal scaling, multi-tenancy, and enterprise SLAs.
-
-2. **Reranking stage** — Add a cross-encoder reranker (e.g., `cross-encoder/ms-marco-MiniLM-L-6-v2`) as a second retrieval stage to improve top-K precision.
-
-3. **Hybrid search** — Combine dense (embedding) and sparse (BM25/TF-IDF) retrieval for better coverage on exact-match queries like product codes or proper names.
-
-4. **Semantic caching** — Cache query embeddings + responses for frequently asked questions to reduce API cost and latency.
-
-5. **Async ingestion** — Process large document sets with async embedding calls or batch requests to the embedding API to reduce ingestion time.
-
-6. **Fine-tuned embeddings** — Train a domain-specific embedding model on the document corpus for significantly better retrieval in specialized fields.
-
-7. **Observability** — Integrate RAGAS or TruLens to continuously evaluate retrieval faithfulness and answer relevancy in production.
-
-8. **Document versioning** — Track document versions and update only changed chunks rather than re-ingesting the entire corpus.
-
----
-
-## Project Structure
-
-```
-biosimilar/
-├── config.py                        # Centralized configuration (reads .env)
-├── ingest.py                        # Ingestion pipeline CLI
-├── requirements.txt
-├── .env                             # API keys and settings (not committed)
-├── README.md
-│
-├── src/
-│   ├── ingestion/
-│   │   ├── document_loader.py       # PDF, TXT, CSV, MD loading
-│   │   ├── chunker.py               # RecursiveCharacterTextSplitter wrapper
-│   │   ├── preprocessor.py          # Text cleaning and normalization
-│   │   └── gdrive_loader.py         # Google Drive ingestion (bonus)
-│   ├── embeddings/
-│   │   └── embedding_generator.py   # HuggingFace or OpenAI embeddings
-│   ├── vectorstore/
-│   │   └── vector_db.py             # ChromaDB wrapper (add, search, delete)
-│   ├── retrieval/
-│   │   └── retriever.py             # MMR / similarity retrieval + formatting
-│   ├── agent/
-│   │   ├── rag_agent.py             # RAGAgent + LangGraph ReAct agent
-│   │   └── tools.py                 # search_documents, list_sources, get_current_date
-│   ├── memory/
-│   │   └── conversation_memory.py   # Sliding-window conversation history
-│   └── utils/
-│       └── helpers.py               # Logging setup
-│
-├── web/
-│   ├── app.py                       # Flask backend (chat, ingest, document APIs)
-│   ├── templates/
-│   │   └── index.html               # Single-page web UI
-│   └── static/
-│       ├── app.js                   # Chat, upload, voice input, TTS logic
-│       └── style.css                # UI styling
-│
-├── cli/
-│   └── main.py                      # Rich terminal interface
-│
-├── data/
-│   └── documents/                   # 11 sample documents
-│       ├── 01_ai_fundamentals.txt
-│       ├── 02_machine_learning_guide.txt
-│       ├── 03_nlp_overview.txt
-│       ├── 04_rag_explained.txt
-│       ├── 05_vector_databases.txt
-│       ├── 06_llm_prompting_guide.txt
-│       ├── 08_deep_learning_guide.txt
-│       ├── 09_ai_ethics_research.txt
-│       ├── 10_mlops_sop.txt
-│       ├── 11_python_best_practices.txt
-│       └── 12_transformer_architecture_paper.txt
-│
-└── tests/
-    ├── test_pipeline.py             # Unit tests
-    └── test_e2e.py                  # End-to-end tests
+```bash
+curl -X POST http://127.0.0.1:5000/api/chat \
+  -H "Content-Type: application/json" \
+  -H "X-RAG-Client: web" \
+  -d '{"question":"What is retrieval-augmented generation?","conversation_id":"demo"}'
 ```
 
----
+Mutating routes require `X-RAG-Client: web`. This custom header helps reject
+unintended browser form submissions; it is not authentication or authorization.
+Conversation IDs may contain letters, numbers, `_`, and `-`, up to 128
+characters.
 
-## Tech Stack
+`/api/health` only confirms that the web process can answer a request. Use
+`/api/status` plus a deployment-specific model/database smoke test when deeper
+readiness is required.
 
-| Component | Technology |
-|-----------|------------|
-| Language | Python 3.10+ |
-| LLM | Groq Llama-3.1-8b-instant (free) / OpenAI GPT (optional) |
-| Embeddings | sentence-transformers all-MiniLM-L6-v2 (local, free) |
-| Vector DB | ChromaDB (persisted) |
-| Orchestration | LangChain + LangGraph |
-| Web UI | Flask + vanilla JS/HTML |
-| CLI | Rich + Click |
-| Testing | pytest |
-| Multi-source | Google Drive API (service account) |
+## Testing
 
----
+Install development dependencies:
 
-*Built for AI Internship Assignment — Agentic RAG System*
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
+Run the default hermetic suite:
+
+```bash
+python -m pytest
+```
+
+The unit and API tests use mocks or in-memory fakes and must not call a model,
+download embeddings, or modify the persisted vector database. Coverage:
+
+```bash
+python -m pytest tests/test_pipeline.py tests/test_backend_hardening.py tests/test_web_api.py \
+  --cov=config --cov=src --cov=web --cov-report=term-missing
+```
+
+Live end-to-end tests are marked `e2e` and skipped by default. They require a
+configured provider and a pre-ingested database:
+
+PowerShell:
+
+```powershell
+$env:RUN_E2E = "1"
+python -m pytest tests/test_e2e.py -m e2e -v
+```
+
+macOS or Linux:
+
+```bash
+RUN_E2E=1 python -m pytest tests/test_e2e.py -m e2e -v
+```
+
+CI compiles the Python sources and runs only the hermetic unit/API suite with
+Hugging Face and Transformers offline flags enabled.
+
+## Storage and operational limits
+
+- Chroma and FAISS are local stores, suitable for a single application
+  deployment rather than horizontally scaled multi-tenancy.
+- FAISS deserialization is disabled by default because loading an untrusted
+  serialized index is unsafe.
+- Conversation memory is bounded and held in process; it is not durable across
+  restarts.
+- Browser chat history is local to the browser profile.
+- Retrieval quality depends on chunking, the embedding model, corpus quality,
+  `TOP_K`, and `RETRIEVAL_MIN_RELEVANCE`. Queries below that score are refused
+  before document context is sent to the chat model.
+- Google Drive support requires separate credentials and optional dependencies.
+
+For larger deployments, move documents and conversations to shared services,
+use a distributed rate limiter, add authentication and authorization, and add
+continuous retrieval/answer-quality evaluation.

@@ -1,42 +1,32 @@
-# Core RAG stack
-langchain>=0.2.0
-langchain-community>=0.2.0
-langchain-openai>=0.1.0
-langchain-chroma>=0.1.0
-chromadb>=0.5.0
+# Production/runtime dependencies.
+# Upper bounds prevent an unreviewed major-version upgrade from changing APIs.
 
-# starlette/fastapi — pinned to resolve chromadb + streamlit conflict
-starlette>=0.46.0,<1.0.0
-fastapi>=0.116.0
+# LangChain and agent orchestration
+langchain>=0.3.0,<2.0.0
+langchain-core>=0.3.0,<2.0.0
+langchain-community>=0.3.0,<1.0.0
+langchain-openai>=0.3.0,<2.0.0
+langchain-chroma>=0.2.0,<2.0.0
+langchain-huggingface>=0.1.0,<2.0.0
+langchain-text-splitters>=0.3.0,<2.0.0
+langgraph>=0.2.0,<2.0.0
 
-# Document loaders
-pypdf>=4.0.0
-pandas>=2.0.0
+# Document loading, embeddings, and vector stores
+chromadb>=0.5.0,<2.0.0
+faiss-cpu>=1.8.0,<2.0.0
+pandas>=2.0.0,<4.0.0
+pypdf>=4.0.0,<7.0.0
+sentence-transformers>=2.7.0,<6.0.0
+transformers>=4.40.0,<6.0.0
 
-# Embeddings
-sentence-transformers>=2.7.0
-tiktoken>=0.7.0
+# Web application, production server, and CLI
+flask>=3.0.0,<4.0.0
+flask-limiter>=3.5.0,<5.0.0
+rich>=13.7.0,<15.0.0
+waitress>=3.0.0,<4.0.0
 
-# Vector store alternatives
-faiss-cpu>=1.8.0
+# Configuration
+python-dotenv>=1.0.0,<2.0.0
 
-# UI & CLI
-streamlit>=1.35.0
-click>=8.1.0
-rich>=13.7.0
-watchdog>=4.0.0
-flask>=3.0.0
-flask-limiter>=3.5.0
-
-# Utilities
-python-dotenv>=1.0.0
-pydantic>=2.7.0
-
-# Evaluation
-ragas>=0.4.0
-datasets>=2.14.0
-
-# Optional: Google Drive ingestion (bonus feature)
-# Uncomment and run: pip install google-api-python-client google-auth
-# google-api-python-client>=2.0.0
-# google-auth>=2.0.0
+# Optional Google Drive ingestion:
+# pip install "google-api-python-client>=2.0,<3.0" "google-auth>=2.0,<3.0"
